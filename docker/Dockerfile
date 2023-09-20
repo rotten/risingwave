@@ -1,6 +1,7 @@
 FROM ubuntu:22.04 AS base
 
-ENV LANG en_US.utf8
+ARG LANG=en_US.utf8
+ENV LANG=$LANG
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
@@ -13,7 +14,7 @@ RUN \
         locales \
         openjdk-11-jdk && \
     rm -rf /var/lib/apt/lists/* && \
-    locale-gen en_US.utf8
+    locale-gen ${LANG}
 
 #######################
 FROM base AS builder
