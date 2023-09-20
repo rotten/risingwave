@@ -24,11 +24,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
     apt-get update -q -y && \
     apt-get install -q --no-install-recommends -y \
-        bash \
         cmake \
         curl \
+        libprotobuf-dev \
         lld \
-        make \
         maven \
         protobuf-compiler \
         unzip && \
@@ -52,12 +51,10 @@ RUN curl -LO https://github.com/risingwavelabs/risingwave/archive/refs/heads/das
     unzip dashboard-artifact.zip && \
     mv risingwave-dashboard-artifact /risingwave/ui && \
     rm dashboard-artifact.zip && \
-    rustup self update  && \
     rustup set profile minimal && \
-    rustup show && \
     # We need to add the `rustfmt` dependency, otherwise `risingwave_pb` will not compile \
     rustup component add rustfmt && \
-    cargo fetch && \
+    cargo fetch -v && \
     # build the executables \
     cargo build -p risingwave_cmd_all --release --features "rw-static-link" && \
     mkdir -p /risingwave/bin && \
