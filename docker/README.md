@@ -28,6 +28,23 @@ docker build . -f docker/Dockerfile --build-arg simd_disabled=true
 
 from the project root and run any subsequent docker commands on the resultant image.
 
+
+## Lint the Dockerfile
+
+It is recommended to run a linter on the Dockerfile to ensure best practices are followed:
+
+```
+docker run -it -v ${PWD}:/root/tmp --rm  hadolint/hadolint /bin/hadolint --ignore DL3008 /root/tmp/Dockerfile
+```
+and for the hdfs Dockerfile:
+```
+docker run -it -v ${PWD}:/root/tmp --rm  hadolint/hadolint /bin/hadolint --ignore DL3008 /root/tmp/Dockerfile.hdfs
+```
+
+
+**DL3008** requires that you pin all operating system patches, which we are not doing at this time to ensure that fresh builds always get the latest security fixes as soon as they are available.  (so it is explicitly ignored in that linter example)
+
+
 ## Use the images
 
 To ensure you are using the latest version of RisingWave image,
