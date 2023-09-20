@@ -36,6 +36,11 @@ It is recommended to run a linter on the Dockerfile to ensure best practices are
 ```
 docker run -it -v ${PWD}:/root/tmp --rm  hadolint/hadolint /bin/hadolint --ignore DL3008 /root/tmp/Dockerfile
 ```
+and for the hdfs Dockerfile:
+```
+docker run -it -v ${PWD}:/root/tmp --rm  hadolint/hadolint /bin/hadolint --ignore DL3008 /root/tmp/Dockerfile.hdfs
+```
+
 
 **DL3008** requires that you pin all operating system patches, which we are not doing at this time to ensure that fresh builds always get the latest security fixes as soon as they are available.  (so it is explicitly ignored in that linter example)
 
