@@ -16,6 +16,7 @@ RUN \
     rm -rf /var/lib/apt/lists/* && \
     locale-gen ${LANG}
 
+
 #######################
 FROM base AS builder
 
@@ -73,6 +74,7 @@ RUN mvn -B package -Dmaven.test.skip=true -Djava.binding.release=true && \
     mkdir -p /risingwave/bin/connector-node && \
     tar -zxvf /risingwave/java/connector-node/assembly/target/risingwave-connector-1.0.0.tar.gz -C /risingwave/bin/connector-node
 
+
 #######################
 FROM base AS risingwave
 
@@ -80,7 +82,7 @@ LABEL org.opencontainers.image.source https://github.com/risingwavelabs/risingwa
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update -q -y && \
-    apt-get install -q --no-install-recommends -y gdb  && \
+    apt-get install -q --no-install-recommends -y gdb && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/ && \
     mkdir -p /risingwave/bin/connector-node && mkdir -p /risingwave/lib
