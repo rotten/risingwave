@@ -181,7 +181,7 @@ COPY --from=rust-builder /risingwave/bin/risingwave /risingwave/bin/risingwave
 COPY --from=rust-builder /risingwave/bin/risingwave.dwp /risingwave/bin/risingwave.dwp
 COPY --from=rust-builder /risingwave/bin/jeprof /usr/local/bin/jeprof
 COPY --from=java-builder /risingwave/bin/connector-node /risingwave/bin/connector-node
-COPY --from=dashboard-builder /risingwave/ui /risingwave/ui
+COPY --from=dashboard-builder /risingwave/dashboard/out /risingwave/ui
 
 # Set default playground mode to docker-playground profile
 ENV PLAYGROUND_PROFILE docker-playground
