@@ -129,7 +129,7 @@ WORKDIR /risingwave/java
 
 # Move java/**/pom.xml to poms/**/pom.xml
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN find . -name pom.xml -exec bash -c 'pom="$1"; mkdir -p poms/$(dirname ${pom}); mv ${pom} poms/${pom}' shell {} \;
+RUN find . -name pom.xml -exec bash -c 'pom="$1"; mkdir -p /risingwave/poms/$(dirname ${pom}); mv ${pom} /risingwave/poms/${pom}' shell {} \;
 
 
 ###############################
