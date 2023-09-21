@@ -68,27 +68,47 @@ COPY rust-toolchain rust-toolchain
 ENV PATH /root/.cargo/bin/:$PATH
 ENV CARGO_INCREMENTAL=0
 
+# We need to add the `rustfmt` dependency, otherwise `risingwave_pb` will not compile
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN rustup set profile minimal && \
+    rustup component add rustfmt
+
+# TODO: cargo-chef doesn't work well now, because we update Cargo.lock very often.
+# We may consider sccache instead.
+
+# RUN cargo install --git https://github.com/xxchan/cargo-chef cargo-chef --locked --rev 11f9fed
+
+################################
+# FROM rust-base AS rust-planner
+
+# RUN mkdir -p /risingwave
+# WORKDIR /risingwave
+# COPY ./ /risingwave
+
+# RUN cargo chef prepare --recipe-path recipe.json
+
+################################
+# FROM rust-base AS rust-builder
+
+# RUN mkdir -p /risingwave
+# WORKDIR /risingwave
+
+# COPY --from=rust-planner /risingwave/recipe.json recipe.json
+
+# # Build dependencies - this can be cached if the dependencies don't change
+# RUN cargo chef cook --release --recipe-path recipe.json
+
+##############################
+FROM rust-base AS rust-builder
+
 ARG GIT_SHA
 ENV GIT_SHA=$GIT_SHA
 
+COPY ./ /risingwave
+WORKDIR /risingwave
+
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN curl -LO https://github.com/risingwavelabs/risingwave/archive/refs/heads/dashboard-artifact.zip && \
-    unzip dashboard-artifact.zip && \
-    mv risingwave-dashboard-artifact /risingwave/ui && \
-    rm dashboard-artifact.zip && \
-    rustup set profile minimal && \
-
-
-##############################
-from base as java-planner
-
-WORKDIR /risingwave/java
-RUN mkdir -p /risingwave/java
-
-    # We need to add the `rustfmt` dependency, otherwise `risingwave_pb` will not compile \
-    rustup component add rustfmt && \
-    cargo fetch -v && \
-    # build the executables \
+RUN cargo fetch -v && \
     cargo build -p risingwave_cmd_all --release --features "rw-static-link" && \
     mkdir -p /risingwave/bin && \
     mv /risingwave/target/release/risingwave /risingwave/bin/ && \
@@ -97,6 +117,46 @@ RUN mkdir -p /risingwave/java
     chmod +x /risingwave/bin/jeprof && \
     mkdir -p /risingwave/lib && \
     cargo clean
+
+
+#########################
+FROM base AS java-planner
+
+RUN mkdir -p /risingwave
+COPY java /risingwave/java
+
+WORKDIR /risingwave/java
+
+# Move java/**/pom.xml to poms/**/pom.xml
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN find . -name pom.xml -exec bash -c 'pom="$1"; mkdir -p poms/$(dirname ${pom}); mv ${pom} poms/${pom}' shell {} \;
+
+
+###############################
+# We use rust-maven-plugin to build java-binding.
+# So it's FROM rust-base
+FROM rust-base AS java-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN \
+    apt-get update -q -y && \
+    apt-get install -q --no-install-recommends -y maven && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /risingwave
+
+WORKDIR /risingwave/java
+
+# 1. copy only poms
+COPY --from=java-planner /risingwave/poms /risingwave/java/
+
+# 2. start downloading dependencies
+RUN mvn dependency:go-offline --fail-never
+
+# 3. add all source code and start compiling
+# TODO: only add java related code so that changing rust code won't recompile java code
+# Currently java-binding depends on the workspace Cargo.toml, which depends on the whole rust codebase
+# Besides, rust-maven-plugin sets --target-dir, so the dependencies are built twice. How to dedup?
+COPY ./ /risingwave
 
 # build the connectors
 RUN mvn -B package -Dmaven.test.skip=true -Djava.binding.release=true && \
@@ -114,13 +174,14 @@ RUN apt-get update -q -y && \
     apt-get install -q --no-install-recommends -y gdb && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/ && \
-    mkdir -p /risingwave/bin/connector-node && mkdir -p /risingwave/lib
+    mkdir -p /risingwave/bin/connector-node && \
+    mkdir -p /risingwave/lib
 
-COPY --from=builder /risingwave/bin/risingwave /risingwave/bin/risingwave
-COPY --from=builder /risingwave/bin/risingwave.dwp /risingwave/bin/risingwave.dwp
-COPY --from=builder /risingwave/bin/connector-node /risingwave/bin/connector-node
-COPY --from=builder /risingwave/ui /risingwave/ui
-COPY --from=builder /risingwave/bin/jeprof /usr/local/bin/jeprof
+COPY --from=rust-builder /risingwave/bin/risingwave /risingwave/bin/risingwave
+COPY --from=rust-builder /risingwave/bin/risingwave.dwp /risingwave/bin/risingwave.dwp
+COPY --from=rust-builder /risingwave/bin/jeprof /usr/local/bin/jeprof
+COPY --from=java-builder /risingwave/bin/connector-node /risingwave/bin/connector-node
+COPY --from=dashboard-builder /risingwave/ui /risingwave/ui
 
 # Set default playground mode to docker-playground profile
 ENV PLAYGROUND_PROFILE docker-playground
@@ -128,6 +189,7 @@ ENV PLAYGROUND_PROFILE docker-playground
 ENV RW_DASHBOARD_UI_PATH /risingwave/ui
 # Set default connector libs path
 ENV CONNECTOR_LIBS_PATH /risingwave/bin/connector-node/libs
+ENV IN_CONTAINER=1
 
 ENTRYPOINT [ "/risingwave/bin/risingwave" ]
 CMD [ "playground" ]
