@@ -1,3 +1,4 @@
+#########################
 FROM ubuntu:22.04 AS base
 
 ARG LANG=en_US.utf8
@@ -16,9 +17,35 @@ RUN \
     rm -rf /var/lib/apt/lists/* && \
     locale-gen ${LANG}
 
+##############################
+FROM base AS dashboard-builder
+
+COPY ./dashboard/ /risingwave/dashboard
+COPY ./proto  /risingwave/proto
+
+WORKDIR /risingwave/dashboard
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN \
+    apt-get update -q -y && \
+    apt-get install -q --no-install-recommends -y \
+        curl \
+        gnupg \
+        libprotobuf-dev \
+        protobuf-compiler && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update -q -y && \
+    apt-get install -q --no-install-recommends -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    npm i && \
+    npm run build-static && \
+    rm -rf node_modules
+
 
 #######################
-FROM base AS builder
+FROM base AS rust-base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
@@ -28,7 +55,6 @@ RUN \
         curl \
         libprotobuf-dev \
         lld \
-        maven \
         protobuf-compiler \
         unzip && \
     rm -rf /var/lib/apt/lists/* && \
@@ -37,11 +63,10 @@ RUN \
 
 WORKDIR /risingwave
 
-COPY ./ /risingwave
+COPY rust-toolchain rust-toolchain
 
 ENV PATH /root/.cargo/bin/:$PATH
-
-ENV IN_CONTAINER=1
+ENV CARGO_INCREMENTAL=0
 
 ARG GIT_SHA
 ENV GIT_SHA=$GIT_SHA
@@ -52,6 +77,14 @@ RUN curl -LO https://github.com/risingwavelabs/risingwave/archive/refs/heads/das
     mv risingwave-dashboard-artifact /risingwave/ui && \
     rm dashboard-artifact.zip && \
     rustup set profile minimal && \
+
+
+##############################
+from base as java-planner
+
+WORKDIR /risingwave/java
+RUN mkdir -p /risingwave/java
+
     # We need to add the `rustfmt` dependency, otherwise `risingwave_pb` will not compile \
     rustup component add rustfmt && \
     cargo fetch -v && \
@@ -66,7 +99,6 @@ RUN curl -LO https://github.com/risingwavelabs/risingwave/archive/refs/heads/das
     cargo clean
 
 # build the connectors
-WORKDIR /risingwave/java
 RUN mvn -B package -Dmaven.test.skip=true -Djava.binding.release=true && \
     mkdir -p /risingwave/bin/connector-node && \
     tar -zxvf /risingwave/java/connector-node/assembly/target/risingwave-connector-1.0.0.tar.gz -C /risingwave/bin/connector-node
