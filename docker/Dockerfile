@@ -20,10 +20,6 @@ RUN \
 ##############################
 FROM base AS dashboard-builder
 
-COPY ./dashboard/ /risingwave/dashboard
-COPY ./proto  /risingwave/proto
-
-WORKDIR /risingwave/dashboard
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
@@ -39,7 +35,14 @@ RUN \
     apt-get update -q -y && \
     apt-get install -q --no-install-recommends -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
-    npm i && \
+
+
+COPY ./dashboard/ /risingwave/dashboard
+COPY ./proto  /risingwave/proto
+
+WORKDIR /risingwave/dashboard
+
+RUN npm i && \
     npm run build-static && \
     rm -rf node_modules
 
@@ -71,6 +74,7 @@ ENV CARGO_INCREMENTAL=0
 # We need to add the `rustfmt` dependency, otherwise `risingwave_pb` will not compile
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN rustup set profile minimal && \
+    rustup show && \
     rustup component add rustfmt
 
 # TODO: cargo-chef doesn't work well now, because we update Cargo.lock very often.
